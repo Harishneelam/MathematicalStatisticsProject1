@@ -1,0 +1,335 @@
+---
+title: "STT810 Mini Project"
+author: "Harish Neelam and Koushik Sai Veerella"
+output: html_document
+---
+### Preferential Attachment Model.
+The Preferential attachment model concerns a growing network, where the probability of a new node attaching to an old node is proportional to the number of connections that old node has. We have created 1000 simulations of the network with 15 nodes. The following are some of the simulations with 15 nodes, a sample of 20 simulations is taken and shown below:
+```{r,echo=FALSE}
+set.seed(29072000)
+sim <- 10000
+nodes <- 15
+maxedge <- replicate(sim,0)
+maxloc <- replicate(sim,0)
+fullstore <- matrix(,ncol=15)
+fmat=matrix(0,nrow=nodes,ncol = nodes)
+for(i in 1:sim){
+  matad = matrix(0,nrow=nodes,ncol = nodes)
+  edges <- replicate(nodes, 0)
+  edges[1] = 1
+  edges[2] = 1
+  matad[1,2]=1
+  matad[2,1]=1
+  for(j in 3:nodes){
+    sumedge <- sum(edges)
+    edges[j] = 1
+    new <- sample(1:(j-1),1, prob = edges[1:(j-1)]/sumedge)
+    edges[new[1]]=edges[new]+1
+    matad[j,new]=1
+    matad[new,j]=1
+  }
+  fullstore <- rbind(fullstore,edges)
+  fmat=fmat+matad
+}
+
+fullstore<- fullstore[2:10001,]
+row.names(fullstore)<-c(1:10000)
+fullstore=t(fullstore)
+fs = as.table(fullstore[,1:20])
+knitr::kable(fs, format="simple",caption = '20 Simulations of 15 Nodes')
+```
+
+* As we see above, the number of edges for 1 to 4 are comparatively more than others. Certainly the first few nodes has more edges compared with others, because a new node is more likely attach to an old node which has more connections. Then the last nodes end up with very few connections. In this simulation, the last nodes ended up with at most 1 edge and 2 edges in very few cases.
+
+#### Affinity Matrix
+
+The Simulations show the number of connections a node has. However, it does not indicate which node is connected to which node. This information can be obtained by an Affinity Matrix. Affinity Matrix is obtained from the Distance matrix. It is nothing but Similarity matrix. It gives the similarity score for every 2 simulations. These similarity measures can be interpreted as the probability that the two points are related. For example, if two data points have coordinates that are close, then their similarity score will be much closer to 1 than two data points with a lot of space between them.Let's see how this is implemented in this case. The following is the Affinity matrix of 15 nodes:
+```{r,echo=FALSE ,include=FALSE}
+library(fields)
+library(reshape2)
+library(ggplot2)
+library(SNFtool)
+library(ggcorrplot)
+library(tidyverse)
+```
+
+```{r,echo=FALSE}
+Dist1 = (dist2(as.matrix(fullstore),as.matrix(fullstore)))^(1/2)
+sig <- sd(Dist1)
+simMat <- exp(-Dist1^2/ (2*sig^2))
+#simMat <- affinityMatrix(Dist1,8,0.5)
+simmm=as.table(round(simMat,3))
+knitr::kable(simmm, format="simple",align = "lllllcccccrrrrr",col.names = c(1:15),caption = 'Affinity Matrix')
+```
+
+* The following shows the number of times the nodes are connected to each other in 10000 simulations(Adjacency matrix for 10000 simulations, describing the probalities of connections.
+```{r,echo=FALSE}
+ffm = as.table(fmat)
+knitr::kable(ffm, format="simple",col.names = c(1:15),caption = 'No.of times a node is connected to other in 10000 simulations.')
+longData<-melt(fmat)
+longData<-longData[longData$value!=0,]
+
+ggplot(longData, aes(x = Var2, y = Var1)) + 
+  geom_raster(aes(fill=value)) + 
+  scale_fill_gradient(low="grey90", high="blue") +
+  labs(x="Nodes", y="Nodes", title="Number of times an edge is present between 2 nodes in 10000 simulations.") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=14))
+
+```
+
+* The Following is the Affinity Matrix, in the below figure we can easily tell the closely related node to any node by just considering the colors.
+```{r,echo=FALSE}
+longData<-melt(round(simMat,4))
+longData<-longData[longData$value!=0,]
+
+ggplot(longData, aes(x = Var2, y = Var1)) + 
+  geom_raster(aes(fill=value)) + 
+  scale_fill_gradient(low="white", high="blue") +
+  labs(x="Edges", y="Edges", title="Affinity Matrix") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=14))
+```
+
+* The Affinity matrix is obtained from the distance matrix. The distance matrix calculates the Euclidean distance for every 2 simulations and gives the result. Then this Distance matrix is used to find Similarity matrix. The Similarity matrix is the opposite of Distance matrix. If the distance between 2 set of data points is 0, it tells that those are related or close to each other. In similarity matrix, the value will be 1, for those which are similar. We used the below formula to calculate the Affinity matrix from Distance matrix.
+
+$$ Affinity \;Matrix \;=\exp(-\beta * Distance\;Matrix^2)\;\;;where \;\;\beta=\frac{1}{2\sigma^2} $$
+
+The Beta value is defined such that we get 1 as diagonal elements. It will be easier to analyse similarity in this case. The Affinity matrix can also be calculated with r-package SNFtool. It takes number of neighbors, hyperparameter and distance matrix as inputs and give affinity matrix as output. Even though the values from both these methods are different, they convey the same message i.e; same similarity. 
+
+
+#### Number of edges vs Edge number.
+* In every simulation, the number edges for a node are different. 
+```{r,echo=FALSE}
+longData<-melt(fullstore[,1:20])
+longData<-longData[longData$value!=0,]
+
+ggplot(longData, aes(x = Var2, y = Var1)) + 
+  geom_raster(aes(fill=value)) + 
+  scale_fill_gradient(low="grey90", high="blue") +
+  labs(x="Simulations", y="Edges", title="Simulations vs Edges") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=12))
+```
+
+
+
+
+
+
+* Here, the edge number 8 is observed whether to which node it is connected.
+```{r,echo=FALSE}
+Alledges <- matrix(data=NA,ncol=10000)
+for(i in 1:15){
+  kedges=fullstore[1,]
+  for (j in 1:i){
+    kedges <- kedges + fullstore[j,]
+  }
+  Alledges=rbind(Alledges,kedges-fullstore[1,]) 
+}
+Alledges=Alledges[2:16,]
+edgenum = 8
+edgenode=replicate(10000,0)
+for(i in 1:10000){
+  en=0
+  for(j in 1:15){
+    if(edgenum<=Alledges[j,i]){
+      en=j
+      break
+    }
+  }
+  edgenode[i]=en
+}
+Edge_8_to_which_node = edgenode
+Edge_8_to_which_node=table(Edge_8_to_which_node)
+knitr::kable(Edge_8_to_which_node, format="simple")
+```
+
+* It is always connected to 2 in most cases and 3 in few cases. Similarliy, we can see about other edge numbers too.
+
+#### Edge Statistics
+
+* We can try to look into the edges and nodes, to get new insights.
+```{r,echo=FALSE}
+Edst = matrix(nrow = 15,ncol = 15)
+for(i in 1:15){
+  for(j in 1:15){
+  Edst[i,j] = table(fullstore[i,])[j]/10000
+  }
+}
+Edst[is.na(Edst)] <- 0.00
+dfg <- as.table(round(Edst,2))
+knitr::kable(dfg, format="simple",col.names = c(1:15),caption = 'Probability of k node having n edges.')
+longData<-melt(Edst)
+longData<-longData[longData$value!=0,]
+
+ggplot(longData, aes(x = Var2, y = Var1)) + 
+  geom_raster(aes(fill=value)) + 
+  scale_fill_gradient2(low="blue",mid="grey90", high="black",midpoint = 0.5) +
+  labs(x="Edges", y="Nodes", title="Probability of Edges for Nodes") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=12))
+```
+
+* The probability that node 15 has only 1 edge is 1. The probability that node 1 has edges is 0. 
+* Let's see the distribution of edges to the nodes.
+```{r,echo=FALSE}
+fullstoredf = as.data.frame(t(fullstore))
+ggplot(fullstoredf, aes(x=V1)) + geom_histogram(binwidth = 0.5,color="white", fill="royalblue4") + scale_x_continuous(name = "Edge distribution for Node 1") +
+scale_y_continuous(name = "Count")
+ggplot(fullstoredf, aes(x=V3)) + geom_histogram(binwidth = 0.5,color="white", fill="blue") + scale_x_continuous(name = "Edge distribution for Node 3") +
+scale_y_continuous(name = "Count")
+ggplot(fullstoredf, aes(x=V7)) + geom_histogram(binwidth = 0.5,color="white", fill="royalblue") + scale_x_continuous(name = "Edge distribution for Node 7") +
+scale_y_continuous(name = "Count")
+```
+
+* We can say that these follow exponential distribution. The number of edges a node has is following exponential distribution. We can find the rate of distribution. The rate of Node 1,3,5,7,9 and Node 11 is as follows:
+```{r,echo=FALSE}
+cat(1/mean(fullstoredf$V1),1/mean(fullstoredf$V3),1/mean(fullstoredf$V5),1/mean(fullstoredf$V7),1/mean(fullstoredf$V9),1/mean(fullstoredf$V11))
+```
+
+* This shows that the rate of distribution when nodes are increasing will increase to 1 eventually. The mean also will slowly declines to 1.
+
+#### 100 Nodes.
+
+* We have repeated the above experiment for 100 nodes.
+* In every simulation of 100 nodes, the number edges for a node are different. 
+```{r,echo=FALSE}
+set.seed(290720)
+sim <- 1000
+nodes <- 100
+maxedge <- replicate(sim,0)
+maxloc <- replicate(sim,0)
+fullstore100 <- matrix(,ncol=100)
+for(i in 1:sim){
+  edges <- replicate(nodes, 0)
+  edges[1] = 1
+  edges[2] = 1
+  for(j in 3:nodes){
+    sumedge <- sum(edges)
+    edges[j] = 1
+    new <- sample(1:(j-1),1, prob = edges[1:(j-1)]/sumedge)
+    edges[new[1]]=edges[new]+1
+  }
+  fullstore100 <- rbind(fullstore100,edges)
+}
+
+fullstore100<- fullstore100[2:1001,]
+row.names(fullstore100)<-c(1:1000)
+fullstore100=t(fullstore100)
+fs100 = as.table(fullstore100[1:20,1:20])
+knitr::kable(fs100, format="simple",col.names = c(1:20),caption = '20 Simulations of first 20 Nodes in 100.')
+```
+
+* The Below figure is the matrix of 25 nodes with 25 simulations.
+```{r,echo=FALSE}
+longData<-melt(fullstore100[1:25,1:25])
+longData<-longData[longData$value!=0,]
+
+ggplot(longData, aes(x = Var2, y = Var1)) + 
+  geom_raster(aes(fill=value)) + 
+  scale_fill_gradient(low="grey90",high="blue") +
+  labs(x="Simulations", y="Edges", title="Simulations vs Edges") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=12))
+```
+
+* We can see that the probabilty distribution changed a little bit from earlier.
+* Here, The probability for last few nodes to have only one edge is 1 . In the same way, the probability of many nodes having more than 5 edges is 0. In the previous case, the probability was close to 0.5. This decreased when number of nodes were increased.
+```{r,echo=FALSE}
+Edst100 = matrix(nrow = 100,ncol = 100)
+for(i in 1:100){
+  for(j in 1:100){
+  Edst100[i,j] = table(fullstore100[i,])[j]/1000
+  }
+}
+Edst100[is.na(Edst100)] <- 0
+dfg100 <- as.table(round(Edst100[1:20,1:20],2))
+knitr::kable(dfg100, format="simple",col.names = c(1:20),caption = 'Probability of having n edges for k node.')
+longData<-melt(Edst100)
+longData<-longData[longData$value!=0,]
+
+ggplot(longData, aes(x = Var2, y = Var1)) + 
+  geom_raster(aes(fill=value)) + 
+  scale_fill_gradient2(low="blue",mid="grey90", high="black",midpoint = 0.5) +
+  labs(x="Edges", y="Nodes", title="Probability of Edges for Nodes") +
+  theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                     axis.text.y=element_text(size=9),
+                     plot.title=element_text(size=12))
+```
+```{r,echo=FALSE}
+fullstore100df = as.data.frame(t(fullstore100))
+ggplot(fullstore100df, aes(x=V10)) + geom_histogram(binwidth = 0.5,color="white", fill="royalblue4") + scale_x_continuous(name = "Edge distribution for Node 10") +
+scale_y_continuous(name = "Count")
+ggplot(fullstore100df, aes(x=V30)) + geom_histogram(binwidth = 0.5,color="white", fill="blue") + scale_x_continuous(name = "Edge distribution for Node 30") +
+scale_y_continuous(name = "Count")
+ggplot(fullstore100df, aes(x=V70)) + geom_histogram(binwidth = 0.5,color="white", fill="royalblue") + scale_x_continuous(name = "Edge distribution for Node 70") +
+scale_y_continuous(name = "Count")
+```
+
+* It can be clearly seen that the edge distribution for nodes is exponential. Let's see if rate has any changes.
+```{r,echo=FALSE}
+cat("No.of Nodes and rate:","\n","    ",1,"    ","  ",3,"   ","  ",10," ","    ",20," ","    ",30," ","    ",70,"\n",1/mean(fullstore100df$V1),1/mean(fullstore100df$V3),1/mean(fullstore100df$V10),1/mean(fullstore100df$V20),1/mean(fullstore100df$V30),1/mean(fullstore100df$V70))
+```
+* This is same as 15 nodes. But the 20th percentile of 15 nodes i,e; 3 nodes has rate of 0.3547 and same 20th percentile of 100 nodes i.e; 20 nodes has rate of 0.4214. There is a slight increase in rate, this means there is a chance that it deteriorates faster to 0. 
+
+### National Nutrient Database
+The nndb Dataset is taken and visualized. 
+```{r,echo=FALSE}
+nndb <- read.csv("D:\\MSUCLASSES\\STT810\\nndb_flat.csv")
+knitr::kable(nndb[1:6,1:12], format="html")
+```
+
+
+#### Data representation
+
+* The Data represents the Food compositions with description about each nutrient and what they contain and It also has other attributes like common name, fibre content, protiens, vitamins etc.USRDA - US recommended dietary allowance.
+* The USDA National Nutrient Database is the major source of food composition data in the United States.
+* It was published by Nutrient Data Laboratory, Beltsville Human Nutrition Research Center, ARS, USDA.
+
+#### Exploring the Data and data types.
+* The following are the data types of the columns that are present in the data.
+* Most of them are integers, some are character data types.
+```{r,echo=FALSE}
+str(nndb)
+```
+The following shows the whole summary of the dataset like Means, medians, counts etc.
+```{r,echo=FALSE}
+summary(nndb)
+```
+
+Let's explore the data by making some plots.
+```{r,echo=FALSE}
+
+ggplot(data = nndb)+
+  geom_bar(mapping = aes(x = FoodGroup), color = 'blue',fill="blue") + theme(axis.text.x = element_text(angle = 90, size = 10)) 
+
+ggplot(data = nndb)+scale_color_gradient2(low = 'royalblue',mid='black', high = 'black',midpoint=1000)+
+  geom_point(mapping = aes(x = Energy_kcal, y = Fat_g,color=VitC_mg))
+
+ggplot(data = nndb) +scale_color_gradient2(low = 'royalblue',mid='black', high = 'black',midpoint=50)+
+  geom_point(mapping = aes(x = Carb_g, y = Protein_g,color=Fat_g))
+```
+
+#### Correlation Matrix.
+The Matrix is very huge, since it has many columns, The following is the correlation matrix for some data.
+```{r,echo=FALSE}
+res <- cor(nndb[8:45])
+cort <-as.table(round(res,2))
+knitr::kable(cort, format="simple")
+```
+
+```{r,echo=FALSE,fig.width=15,fig.height=10}
+ggcorrplot(cort,colors = c("black","grey90" ,"blue"),hc.order = TRUE,outline.col = "white", method = "circle",title = 'Heatmap of Correlation Matrix.')
+```
+
+#### Interesting things About nndb Data
+* Most of the columns are following exponential distribution with high density at 0 and then the count falling to 0.
+* Vitamin content is very low in all of the products.
+* There are few columns whose correlation is one, that means they are strongly related.  
+* All the products contain the appropriate proportions of the nutrients as specified by the USRDA.
