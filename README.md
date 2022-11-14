@@ -1,3 +1,3 @@
 # MathematicalStatisticsProject1
 
-- This Project consists of visualizing preferential attachment model and a dataset in R.
+- This Project is about visualizing preferential attachment model and analysing a dataset in R.
