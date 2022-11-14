@@ -1,5 +1,5 @@
 ---
-title: "STT810 Mini Project"
+title: "Mini Project"
 author: "Harish Neelam and Koushik Sai Veerella"
 output: html_document
 ---
